@@ -93,4 +93,31 @@ cargo build --release --target "x86_64-pc-windows-gnu"
 The path of the executable in this case will also include the target:
 `target/x86_64-pc-windows-gnu/release/first.exe`.
 
+To get the available targets, run:
+
+```bash
+rustc --print target-list
+```
+
+## Adding dependencies
+
+Dependencies are added to `Cargo.toml`. The `cargo build` command automatically
+downloads and links them to the project.
+
+The simplest syntax is:
+
+```toml
+[dependencies]
+time = "0.1.12"
+```
+
+where the string contains the *semver* of the project. In some cases, more
+details are needed, e.g.:
+
+```toml
+[dependencies]
+gio = { version = "0.9.1", features = ["v2_44"] }
+gtk = { version = "0.9.2", features = ["v3_16"] }
+```
+
 [1]: https://archlinux.org/packages/community/x86_64/mingw-w64-gcc/
