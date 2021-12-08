@@ -112,7 +112,7 @@ The simplest syntax is:
 time = "0.1.12"
 ```
 
-where the string contains the *semver* of the project. In some cases, more
+where the string contains the *semver* of the crate. In some cases, more
 details are needed, e.g.:
 
 ```toml
