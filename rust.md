@@ -121,4 +121,19 @@ gio = { version = "0.9.1", features = ["v2_44"] }
 gtk = { version = "0.9.2", features = ["v3_16"] }
 ```
 
+# Basic types
+
+## Strings
+
+### Iterating over the code points of a string
+
+```rust
+let text: &'static str = "árvíztűrő tükörfúrógép";
+let str_arr: Vec<char> = text.chars().collect();
+
+for i in 0..str_arr.len() {
+    println!("{}", str_arr[i])
+}
+```
+
 [1]: https://archlinux.org/packages/community/x86_64/mingw-w64-gcc/
