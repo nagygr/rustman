@@ -2,7 +2,8 @@
 
 ## Installing for the host architecture
 
-Install `rustup`, the official installation utility of Rust (on Arch):
+Install `rustup`, the official installation utility of Rust. On Arch-based
+distros, issue:
 
 ```bash
 pacman -S rustup
