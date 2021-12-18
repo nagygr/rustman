@@ -100,6 +100,18 @@ To get the available targets, run:
 rustc --print target-list
 ```
 
+## Setting compiler flags
+
+Compiler flags can be directly set in the argument list of `rustc`. Cargo can
+pass on the arguments to it, and there are several ways to achieve this. One of
+this is by setting an environment variable called `RUSTFLAGS`:
+
+```bash
+RUSTFLAGS="-C opt-level=3" cargo build --release
+```
+
+The line above instructs the compiler to use the highest optimization level.
+
 ## Adding dependencies
 
 Dependencies are added to `Cargo.toml`. The `cargo build` command automatically
