@@ -133,6 +133,56 @@ gio = { version = "0.9.1", features = ["v2_44"] }
 gtk = { version = "0.9.2", features = ["v3_16"] }
 ```
 
+## Separating code into modules and libraries
+
+Files are handled as modules if they have the same name of the module.
+Directories can act as intermediate modules but they require a rust source file
+with same name (and `.rs` extension) that exports the modules within.
+
+The sources below reside in the following directory structure:
+
+```
+src/
+	main.rs
+	graphs.rs
+	graphs/
+		trees.rs
+```
+
+-	`main.rs`:
+
+	```rust
+	mod graphs;
+
+	use crate::graphs::trees;
+
+	fn main() {
+		let rbt = trees::RedBlack::new();
+
+		println!("Number of nodes: {}", rbt.nodes());
+	}
+	```
+
+-	`graphs.rs`
+
+	```rust
+	pub mod trees;
+	```
+
+-	`grpahs/trees.rs`:
+
+	```rust
+	pub struct RedBlack {
+		...
+	}
+
+	impl RedBlack {
+		pub fun new() -> RedBlack {
+			...
+		}
+	}
+	```
+
 # Basic types
 
 ## Strings
