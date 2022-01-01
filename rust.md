@@ -198,4 +198,93 @@ for i in 0..str_arr.len() {
 }
 ```
 
+## Function pointers
+
+The following example shows a simple state machine realized with a vector of
+function pointers and an enumeration that is used to store the current state and
+index into the vector.
+
+```rust
+#[derive(Copy, Clone)]
+enum State {
+    Normal,
+    CommentStart,
+    InComment,
+    EndStart,
+}
+
+struct StateData {
+	state: State,
+}
+
+impl StateData {
+	fn new() -> StateData {
+		StateData {
+			state: State::Normal,
+		}
+	}
+}
+
+fn normal(s: &mut StateData, c: char) {
+	if c == '/' {
+		s.state = State::CommentStart;
+	} else {
+		print!("{}", c);
+	}
+}
+
+fn comment_start(s: &mut StateData, c: char) {
+	if c == '*' {
+		s.state = State::InComment;
+	} else {
+		print!("/{}", c);
+	}
+}
+
+fn in_comment(s: &mut StateData, c: char) {
+	if c == '*' {
+		s.state = State::EndStart;
+	}
+}
+
+fn end_start(s: &mut StateData, c: char) {
+	if c == '/' {
+		s.state = State::Normal;
+	} else if c != '*' {
+		s.state = State::InComment;
+	}
+}
+
+fn remove_comments(code: &str) {
+	let states:Vec<fn(&mut StateData, char)> = vec![
+		normal,
+		comment_start,
+		in_comment,
+		end_start,
+	];
+
+	let mut s = StateData::new();
+
+	for c in code.chars() {
+		states[s.state as usize](&mut s, c);
+	}
+}
+
+fn main() {
+	remove_comments(
+        r#"
+		/* Hello world */
+		fn thisIsAFunction(s: &str) {
+			println!(s);
+			/*
+			 * Multiline comment
+			 *
+			 * Try to catch me if you can
+			 */
+		}
+	"#,
+    );
+}
+```
+
 [1]: https://archlinux.org/packages/community/x86_64/mingw-w64-gcc/
