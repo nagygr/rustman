@@ -303,7 +303,6 @@ Install the required mingw libraries:
 -	mingw-w64-gcc
 -	mingw-w64-gtk{3,4}
 -	mingw-w64-cairo
--	mingw-w64-cairo-bootstrap
 -	mingw-w64-freetype2
 -	mingw-w64-gdk-pixbuf2
 -	mingw-w64-gettext
