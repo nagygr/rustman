@@ -334,7 +334,7 @@ Issue:
 docker build . -t gtkcross
 ```
 
-The `cd` into the root of the Gtk-based Rust project that you want to compile
+Then `cd` into the root of the Gtk-based Rust project that you want to compile
 and issue:
 
 ```bash
