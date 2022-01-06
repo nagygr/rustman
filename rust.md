@@ -341,14 +341,24 @@ and issue:
 docker create -v $(pwd):/home/rust/src --name rust_gtk gtkcross:latest
 ```
 
+Finally, build by issuing:
+
+```bash
+docker start -ai rust_gtk
+```
+
 >	**Note**
 >
->	The names `gtkcross` and `rust_gtk` can be freely changed.
+>	1.	The first step only needs to be done once. The second step only needs to
+>		be done once per project. The third step shall be done every time a new
+>		build is needed.
 >
->	If you want to use the Windows 10 theme, add the following after `docker
->	create`:
+>	2.	The names `gtkcross` and `rust_gtk` can be freely changed.
 >
->	`-e WIN_THEME=true`
+>	3.	If you want to use the Windows 10 theme, add the following after `docker
+>		create`:
+>
+>		`-e WIN_THEME=true`
 
 The Windows executable will be packaged into `package.zip` together with all the
 DLLs that it depends on. It's not the most beautiful solution but it works.
