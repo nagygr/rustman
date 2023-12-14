@@ -287,6 +287,66 @@ fn main() {
 }
 ```
 
+# Modelling concepts
+
+## Static and dynamic dispatch
+
+The following example shows how static dispatch is achieved using templates
+(and with the `impl` shorthand) and how dynamic dispatch works with the `dyn`
+keyword. The latter involves using trait objects, having values on the heap and
+working with fat pointers (that contain the address of the variable and that of
+the virtual method table which points to the methods implementing the given
+trait for the type).
+
+```rust
+trait Driveable {
+    fn drive(&self);
+}
+
+struct Sedan {}
+
+impl Driveable for Sedan {
+    fn drive(&self) {
+        println!("sedan driving")
+    }
+}
+
+struct SUV {}
+
+impl Driveable for SUV {
+    fn drive(&self) {
+        println!("suv driving")
+    }
+}
+
+// this becomes a template function and does not
+// use vtable nor heap
+fn drive_vehicle(v: impl Driveable) {
+    v.drive();
+}
+
+// this is equivalent to the one above
+fn drive_vehicle_exp<D: Driveable>(v: D) {
+    v.drive();
+}
+
+fn main() {
+    let vehicles: Vec<Box<dyn Driveable>> = vec![
+        Box::new(Sedan {}),
+        Box::new(SUV {}),
+        Box::new(SUV {}),
+        Box::new(Sedan {}),
+    ];
+
+    for v in vehicles {
+        v.drive();
+    }
+
+    drive_vehicle(Sedan{});
+    drive_vehicle_exp(Sedan{});
+}
+```
+
 # GUI
 
 ## Gtk
