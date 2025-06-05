@@ -28,7 +28,7 @@ rustup target add x86_64-pc-windows-gnu
 ```
 
 Furthermore, Cargo needs to be told where the linker and `ar` are. For this, you
-need to edit `~/.cargo/config`:
+need to edit `~/.cargo/config.toml`:
 
 ```toml
 [target.x86_64-pc-windows-gnu]
@@ -40,6 +40,10 @@ ar = "/usr/bin/x86_64-w64-mingw32-ar"
 >
 >	These paths are valid for Arch Linux and Manjaro. On other systems these
 >	tools might be located elsewhere.
+>
+>   Also note, that in earlier versions the file was called `~/.cargo/config`
+>   but it was renamed to reflect the format and now a compiler warning is
+>   issued if the extension is missing.
 
 # Working with projects
 
@@ -330,6 +334,14 @@ fn drive_vehicle_exp<D: Driveable>(v: D) {
     v.drive();
 }
 
+// yet another way of writing the same thing
+fn drive_vehicle_where<D>(v: D)
+where
+    D: Driveable,
+{
+    v.drive();  
+}
+
 fn main() {
     let vehicles: Vec<Box<dyn Driveable>> = vec![
         Box::new(Sedan {}),
@@ -344,6 +356,7 @@ fn main() {
 
     drive_vehicle(Sedan{});
     drive_vehicle_exp(Sedan{});
+    drive_vehicle_where(Sedan{});
 }
 ```
 
