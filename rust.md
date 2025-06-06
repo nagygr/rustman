@@ -378,8 +378,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 The problem with this solution is that it involves a heap allocation and
 dynamic dispatch. A more idiomatic and efficient way to handle multiple error
 types in Rust is to define a custom enum that represents all possible errors in
-your function and implement the std::error::Error trait for it. This allows you
-to still use the ? operator without incurring the performance hit of dynamic
+your function and implement the `std::error::Error` trait for it. This allows you
+to still use the `?` operator without incurring the performance hit of dynamic
 allocation. For example:
 
 ```rust
@@ -409,6 +409,12 @@ fn my_function() -> Result<(), MyError> {
     Ok(())
 }
 ```
+
+>   **Note**
+>
+>   `map_err` is a method on `Result` and it maps a `Result<T, E>` to
+>   `Result<T, F>` by applying a function to a contained `Err` value, leaving
+>   an `Ok` value untouched.
 
 By using a custom error type, you avoid heap allocation, maintain type safety,
 and improve performance while still leveraging Rust's powerful error-handling
