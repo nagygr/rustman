@@ -363,7 +363,7 @@ fn main() {
 ## Effective error handling
 
 It is customary and very comfortable to use the `?` operator to pass errors up
-the call stack in functions. The catch is that this only works if all the call
+the call stack in functions. The catch is that this only works if all the calls
 that have this operator return the exact same error type.
 
 A possible solution to this is to not return `Error` but a boxed, `dyn Error`
