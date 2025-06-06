@@ -360,6 +360,60 @@ fn main() {
 }
 ```
 
+## Effective error handling
+
+It is customary and very comfortable to use the `?` operator to pass errors up
+the call stack in functions. The catch is that this only works if all the call
+that have this operator return the exact same error type.
+
+A possible solution to this is to not return `Error` but a boxed, `dyn Error`
+which will allow a polymorphic handling of the errors:
+
+```rust
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ...
+}
+```
+
+The problem with this solution is that it involves a heap allocation and
+dynamic dispatch. A more idiomatic and efficient way to handle multiple error
+types in Rust is to define a custom enum that represents all possible errors in
+your function and implement the std::error::Error trait for it. This allows you
+to still use the ? operator without incurring the performance hit of dynamic
+allocation. For example:
+
+```rust
+use std::fmt;
+
+#[derive(Debug)]
+enum MyError {
+    Io(std::io::Error),
+    Parse(std::num::ParseIntError),
+}
+
+impl fmt::Display for MyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MyError::Io(err) => write!(f, "IO error: {}", err),
+            MyError::Parse(err) => write!(f, "Parse error: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for MyError {}
+
+fn my_function() -> Result<(), MyError> {
+    let data = std::fs::read_to_string("file.txt").map_err(MyError::Io)?;
+    let number: i32 = data.trim().parse().map_err(MyError::Parse)?;
+    println!("Parsed number: {}", number);
+    Ok(())
+}
+```
+
+By using a custom error type, you avoid heap allocation, maintain type safety,
+and improve performance while still leveraging Rust's powerful error-handling
+mechanisms.
+
 # GUI
 
 ## Gtk
