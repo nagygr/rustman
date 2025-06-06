@@ -422,6 +422,236 @@ By using a custom error type, you avoid heap allocation, maintain type safety,
 and improve performance while still leveraging Rust's powerful error-handling
 mechanisms.
 
+## I/O-bound and CPU-intensive parallelism
+
+I/O-bound parallelism is best handled by an `async` runtime (e.g. [Tokio][3]).
+The problem is that a blocking operation can ruin the performance of the entire
+runtime. This is why Tokio has a way to spawn a blocking thread which is
+handles differently. But that's only a single thread, so CPU-intensive
+parallelism needs to be implemented on top of that, either by hand, or using a
+crate like [Rayon][4].
+
+The following example shows a use-case where multiple files are read in
+parallel using Tokio, then the contents are processed also in parallel but with
+Rayon (contents are split to words, stop words are removed and a word frequency
+count is performed). In the end, the results are written back to a file.
+
+```rust
+use rayon::prelude::*;
+use regex::Regex;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::fs::File;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::mpsc;
+
+// --- Constants ---
+const STOPWORDS_FILE: &str = "stopwords.txt";
+const OUTPUT_FILE: &str = "processed_words.txt";
+
+// --- Helper Function: Load Stopwords ---
+async fn load_stopwords(filepath: &str) -> Result<HashSet<String>, Box<dyn std::error::Error>> {
+    let mut file = File::open(filepath).await?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).await?;
+    let stopwords: HashSet<String> = contents.lines().map(|s| s.to_lowercase()).collect();
+    Ok(stopwords)
+}
+
+// --- Text Processing Functions (CPU-intensive, to be run by Rayon) ---
+
+// Splits text into words, converts to lowercase, and filters out non-alphabetic characters.
+fn split_to_words(text: &str) -> Vec<String> {
+    let re = Regex::new(r"\b\w+\b").unwrap(); // Matches word boundaries
+    re.find_iter(text)
+        .map(|m| m.as_str().to_lowercase())
+        .collect()
+}
+
+// Removes stopwords from a list of words.
+fn remove_stopwords(words: Vec<String>, stopwords: &HashSet<String>) -> Vec<String> {
+    words
+        .into_iter()
+        .filter(|word| !stopwords.contains(word))
+        .collect()
+}
+
+// CPU-intensive word frequency calculation operation.
+fn perform_word_frequency_calculation(words_list: Vec<Vec<String>>) -> String {
+    if words_list.is_empty() {
+        return "No words to compare.".to_string();
+    }
+
+    // Combine all words from all files into a single list for this simple demo
+    let all_words: Vec<String> = words_list.into_iter().flatten().collect();
+
+    // Create a word frequency map
+    let mut word_counts: HashMap<String, usize> = HashMap::new();
+    for word in &all_words {
+        *word_counts.entry(word.clone()).or_insert(0) += 1;
+    }
+
+    // A very simplistic "word_frequency" output: just return the most frequent words.
+    let mut sorted_words: Vec<(&String, &usize)> = word_counts.iter().collect();
+    sorted_words.sort_by(|a, b| b.1.cmp(a.1));
+
+    let mut result = String::new();
+    result.push_str("Most frequent words across all files:\n");
+    for (word, count) in sorted_words.iter().take(20) {
+        // Top 20 most frequent words
+        result.push_str(&format!("  {}: {}\n", word, count));
+    }
+    result
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Usage: {} <file1> <file2> ...", args[0]);
+        return Ok(());
+    }
+
+    let input_files: Vec<PathBuf> = args[1..].iter().map(PathBuf::from).collect();
+
+    // --- Load Stopwords ---
+    println!("Loading stopwords...");
+    let stopwords = Arc::new(load_stopwords(STOPWORDS_FILE).await?);
+    println!("Stopwords loaded.");
+
+    // --- Channels for communication between Tokio (IO) and Rayon (CPU) ---
+    // Channel for sending file contents to Rayon
+    let (tx_content, mut rx_content) = mpsc::channel::<(usize, String)>(100); // (index, content)
+    // Channel for sending processed words back to Tokio
+    let (tx_processed, mut rx_processed) = mpsc::channel::<Vec<String>>(100);
+
+    let num_files = input_files.len();
+    let stopwords_clone_for_rayon = stopwords.clone();
+
+    // --- Spawn Tokio tasks for reading files concurrently ---
+    let read_handles: Vec<_> = input_files
+        .into_iter()
+        .enumerate()
+        .map(|(i, path)| {
+            let tx_content = tx_content.clone();
+            tokio::spawn(async move {
+                println!("Reading file: {:?}", path);
+                match File::open(&path).await {
+                    Ok(mut file) => {
+                        let mut contents = String::new();
+                        if let Ok(_) = file.read_to_string(&mut contents).await {
+                            println!("Finished reading file: {:?}", path);
+                            if let Err(e) = tx_content.send((i, contents)).await {
+                                eprintln!("Error sending file content: {}", e);
+                            }
+                        } else {
+                            eprintln!("Error reading content from file: {:?}", path);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error opening file {:?}: {}", path, e);
+                    }
+                }
+            })
+        })
+        .collect();
+
+    // Drop the original tx_content to signal the Rayon task when all senders are dropped
+    drop(tx_content);
+
+    // --- Spawn a Rayon task for CPU-intensive operations ---
+    // The closure passed to spawn_blocking is synchronous, but it uses a new
+    // current_thread Tokio runtime to execute an async block inside.
+    let rayon_handle = tokio::task::spawn_blocking(move || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async move {
+                // This async block runs on the blocking thread
+                let mut file_contents: Vec<Option<String>> = vec![None; num_files];
+                let mut received_count = 0;
+
+                // Receive file contents from the Tokio reader tasks
+                // This `recv().await` awaits on the internal current_thread runtime
+                while let Some((index, content)) = rx_content.recv().await {
+                    file_contents[index] = Some(content);
+                    received_count += 1;
+                    if received_count == num_files {
+                        break;
+                    }
+                }
+
+                // Filter out None values and collect the actual contents
+                let valid_contents: Vec<String> =
+                    file_contents.into_iter().filter_map(|x| x).collect();
+
+                // Process each file's content in parallel using Rayon
+                let processed_words_per_file: Vec<Vec<String>> = valid_contents
+                    .par_iter()
+                    .map(|content| {
+                        let words = split_to_words(content);
+                        remove_stopwords(words, &stopwords_clone_for_rayon)
+                    })
+                    .collect();
+
+                // Perform the "word frequency calculation" on all processed words
+                let word_frequency_result =
+                    perform_word_frequency_calculation(processed_words_per_file.clone());
+
+                // Send the processed words (or a combined representation) back to Tokio
+                // This `send().await` awaits on the internal current_thread runtime
+                let all_processed_words: Vec<String> =
+                    processed_words_per_file.into_iter().flatten().collect();
+                let unique_words: Vec<String> = all_processed_words
+                    .into_iter()
+                    .collect::<HashSet<String>>()
+                    .into_iter()
+                    .collect();
+
+                if let Err(e) = tx_processed.send(unique_words).await {
+                    eprintln!("Error sending processed words back to Tokio: {}", e);
+                }
+                word_frequency_result // This String is the return value of the async block
+            }) // block_on returns the result of the async block
+    });
+
+    // --- Wait for all read operations to complete (optional, but good for error handling) ---
+    for handle in read_handles {
+        handle.await?;
+    }
+
+    // --- Receive processed data from Rayon and write to output file ---
+    let mut output_file = File::create(OUTPUT_FILE).await?;
+    println!("Awaiting processed words from Rayon...");
+
+    let mut all_unique_words_to_write = Vec::new();
+    while let Some(words) = rx_processed.recv().await {
+        all_unique_words_to_write.extend(words);
+    }
+    all_unique_words_to_write.sort(); // Sort for consistent output
+
+    println!("Writing processed words to '{}'...", OUTPUT_FILE);
+    for word in all_unique_words_to_write {
+        output_file.write_all(word.as_bytes()).await?;
+        output_file.write_all(b"\n").await?;
+    }
+    println!("Finished writing processed words.");
+
+    // Await the Rayon task to get its return value (the word_frequency result)
+    let word_frequency_output = rayon_handle
+        .await
+        .expect("Rayon task failed to complete or panicked");
+    println!("\n--- Word Frequency Results ---");
+    println!("{}", word_frequency_output);
+
+    println!("\nText processing completed successfully!");
+
+    Ok(())
+}
+```
+
 # GUI
 
 ## Gtk
@@ -502,3 +732,5 @@ Also note, that the `target` directory will be owned by `root`.
 
 [1]: https://archlinux.org/packages/community/x86_64/mingw-w64-gcc/
 [2]: https://github.com/etrombly/rust-crosscompile
+[3]: https://crates.io/crates/tokio
+[4]: https://crates.io/crates/rayon
